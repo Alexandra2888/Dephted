@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 10% 4%;
+    --card: 240 5% 7%;
+    --card-elevated: 240 6% 6%;
+    --card-foreground: 240 5% 91%;
+    --border: 240 4% 16%;
+    --muted: 240 4% 11%;
+    --muted-foreground: 240 4% 46%;
+    --subtle-foreground: 240 5% 33%;
+    --foreground: 240 5% 91%;
+    --primary: 258 90% 66%;
+    --primary-light: 258 90% 76%;
+    --primary-foreground: 240 5% 91%;
+    --success: 141 70% 58%;
+    --success-foreground: 141 60% 92%;
+    --warning: 25 95% 64%;
+    --warning-foreground: 25 95% 12%;
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --accent: 240 4% 11%;
+    --accent-foreground: 240 5% 91%;
+    --secondary: 240 4% 11%;
+    --secondary-foreground: 240 5% 91%;
+    --input: 240 4% 16%;
+    --ring: 258 90% 66%;
+    --popover: 240 5% 7%;
+    --popover-foreground: 240 5% 91%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-subtle-foreground;
+  }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.cursor-blink { animation: cursor-blink 1.06s step-end infinite; }
+.fade-up      { animation: fade-up 0.35s ease forwards; }
+.shimmer-strip {
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary-light)), hsl(var(--primary)));
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
