@@ -11,23 +11,45 @@ export function SignupForm() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [pendingConfirmation, setPendingConfirmation] = useState(false)
 
   async function handleSubmit() {
     setLoading(true)
     setError(null)
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) {
       setError(error.message)
+      setLoading(false)
+      return
+    }
+    if (!data.session) {
+      setPendingConfirmation(true)
       setLoading(false)
       return
     }
     router.push("/dashboard")
   }
 
+  if (pendingConfirmation) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-mono text-foreground">
+          check your email to confirm, then sign in_
+        </p>
+        <a
+          href="/login"
+          className="text-xs font-mono text-muted-foreground hover:text-foreground hover:underline"
+        >
+          back to sign in
+        </a>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-4" suppressHydrationWarning>
+      <div className="flex flex-col gap-1.5" suppressHydrationWarning>
         <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
           email
         </label>
@@ -42,10 +64,11 @@ export function SignupForm() {
             "transition-colors"
           )}
           placeholder="you@example.com"
+          suppressHydrationWarning
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5" suppressHydrationWarning>
         <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
           password
         </label>
@@ -61,6 +84,7 @@ export function SignupForm() {
             "transition-colors"
           )}
           placeholder="••••••••"
+          suppressHydrationWarning
         />
       </div>
 

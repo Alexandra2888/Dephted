@@ -26,8 +26,8 @@ export function LoginForm() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-4" suppressHydrationWarning>
+      <div className="flex flex-col gap-1.5" suppressHydrationWarning>
         <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
           email
         </label>
@@ -42,10 +42,11 @@ export function LoginForm() {
             "transition-colors"
           )}
           placeholder="you@example.com"
+          suppressHydrationWarning
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5" suppressHydrationWarning>
         <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
           password
         </label>
@@ -61,6 +62,7 @@ export function LoginForm() {
             "transition-colors"
           )}
           placeholder="••••••••"
+          suppressHydrationWarning
         />
       </div>
 

@@ -56,7 +56,7 @@ npm run build
 | Variable                        | Purpose                                                 |
 | ------------------------------- | ------------------------------------------------------- |
 | `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL                                    |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (used by both browser and SSR client) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (used by both browser and SSR client) |
 | `NEXT_PUBLIC_API_URL`           | Base URL of the FastAPI backend (planned)               |
 
 ## Project layout (current)
