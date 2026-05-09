@@ -17,6 +17,7 @@ export function StepTheory({ step, sessionId, onComplete }: StepTheoryProps) {
 
   useEffect(() => {
     if (step || streaming) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-shot guard; refactor when wiring real BE stream
     setStreaming(true)
     let buffer = ""
 
@@ -32,6 +33,7 @@ export function StepTheory({ step, sessionId, onComplete }: StepTheoryProps) {
         onComplete({ type: "theory", content: buffer })
       },
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; props are stable for the session
   }, [])
 
   if (!content && streaming) {
