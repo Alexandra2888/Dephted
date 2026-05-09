@@ -33,7 +33,10 @@ Frontend in progress; backend in design. See [`docs/architecture.md`](docs/archi
 
 ## Quick start
 
+The frontend lives in `client/`; the backend will live in `server/`. All FE scripts run from inside `client/`.
+
 ```
+cd client
 npm install
 cp .env.local.example .env.local
 npm run dev
@@ -41,7 +44,7 @@ npm run dev
 
 Then open http://localhost:3000.
 
-Other scripts:
+Other scripts (from `client/`):
 
 ```
 npm run typecheck
@@ -51,7 +54,7 @@ npm run build
 
 ## Environment
 
-`.env.local` keys (see `.env.local.example`):
+`client/.env.local` keys (see `client/.env.local.example`):
 
 | Variable                        | Purpose                                                 |
 | ------------------------------- | ------------------------------------------------------- |
@@ -59,39 +62,33 @@ npm run build
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (used by both browser and SSR client) |
 | `NEXT_PUBLIC_API_URL`           | Base URL of the FastAPI backend (planned)               |
 
-## Project layout (current)
+## Project layout
 
 ```
-src/
-├── app/
-│   ├── (app)/             # authed app shell, dashboard, lesson pages
-│   └── (auth)/            # login, signup
-├── components/
-│   ├── dashboard/         # topic grid, filters, new-session input
-│   ├── lesson/            # lesson-page steps (theory, check, problem, feedback, complete)
-│   ├── shared/            # code block, status badge, streaming cursor, brand mark
-│   ├── ui/                # shadcn primitives
-│   └── logo.tsx           # DepthedLogo (wordmark | wordmark-tagline | favicon)
-├── lib/
-│   ├── supabase/          # browser + server SSR clients
-│   ├── api/               # FastAPI client + session calls
-│   ├── mock/              # mock lesson data for FE-only development
-│   └── utils.ts
-└── middleware.ts          # Supabase JWT cookie refresh
+.
+├── client/                # Next.js frontend
+│   └── src/
+│       ├── app/             # authed shell, auth, lesson, dashboard
+│       ├── components/      # dashboard, lesson, shared, ui, logo
+│       ├── lib/             # supabase, api client, mock data, utils
+│       └── middleware.ts    # Supabase JWT cookie refresh
+├── server/                # FastAPI backend (placeholder, see server/README.md)
+├── docs/
+│   └── architecture.md    # full system design
+├── plan.md                # build punch list (gitignored)
+└── README.md
 ```
-
-The target monorepo layout (`apps/web/` + `apps/api/`) is described in the RFC.
 
 ## Deployment
 
-- **Frontend:** Vercel — zero-config from this repo.
+- **Frontend:** Vercel — set the project's **Root Directory** to `client/`.
 - **Backend:** FastAPI on Fly.io or Railway (see RFC §11).
 
 ## Brand
 
 Identity is monospace, terminal-inspired. The wordmark is `depthed` followed by a blinking cursor block; the favicon is `d_` in a rounded square.
 
-`src/components/logo.tsx` exports `DepthedLogo` with three variants (`wordmark`, `wordmark-tagline`, `favicon`) and three themes (`light`, `dark`, `auto`).
+`client/src/components/logo.tsx` exports `DepthedLogo` with three variants (`wordmark`, `wordmark-tagline`, `favicon`) and three themes (`light`, `dark`, `auto`).
 
 Tagline: `learn by going deeper_`
 

@@ -1,8 +1,2 @@
-.next/
-node_modules/
-.env.local
-.env
-out/
-build/
-*.tsbuildinfo
 plan.md
+.DS_Store

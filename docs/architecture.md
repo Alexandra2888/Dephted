@@ -166,7 +166,7 @@ When the user submits an answer or requests a hint, the message is appended to t
 
 ### 7.4 Brand identity
 
-Monospace, terminal-inspired. Wordmark is `depthed` followed by a blinking cursor block; favicon is `d_` in a rounded square. Implemented in `src/components/logo.tsx` via the `DepthedLogo` component (variants: `wordmark | wordmark-tagline | favicon`; themes: `light | dark | auto`). Generous whitespace and terminal-cursor accents are consistent across logo and lesson UI.
+Monospace, terminal-inspired. Wordmark is `depthed` followed by a blinking cursor block; favicon is `d_` in a rounded square. Implemented in `client/src/components/logo.tsx` via the `DepthedLogo` component (variants: `wordmark | wordmark-tagline | favicon`; themes: `light | dark | auto`). Generous whitespace and terminal-cursor accents are consistent across logo and lesson UI.
 
 ---
 
@@ -300,32 +300,30 @@ Hand-curated golden set: 30 sessions across 5 backend topics (HTTP basics, REST 
 
 ```
 depthed/
-├── apps/
-│   ├── web/                  # Next.js frontend
+├── client/                  # Next.js frontend
+│   ├── src/
 │   │   ├── app/
 │   │   ├── components/
 │   │   │   └── logo.tsx
-│   │   ├── lib/
-│   │   └── package.json
-│   └── api/                  # FastAPI backend
-│       ├── agents/
-│       │   ├── curriculum.py
-│       │   ├── theory.py
-│       │   ├── problem.py
-│       │   ├── feedback.py
-│       │   └── memory.py
-│       ├── graph.py
-│       ├── routers/
-│       ├── prompts/          # *.md files
-│       ├── evals/
-│       │   ├── dataset.jsonl
-│       │   ├── scorers.py
-│       │   └── run.py
-│       └── pyproject.toml
-├── packages/
-│   └── types/                # shared TS types
+│   │   └── lib/
+│   └── package.json
+├── server/                  # FastAPI backend
+│   ├── agents/
+│   │   ├── curriculum.py
+│   │   ├── theory.py
+│   │   ├── problem.py
+│   │   ├── feedback.py
+│   │   └── memory.py
+│   ├── graph.py
+│   ├── routers/
+│   ├── prompts/             # *.md files
+│   ├── evals/
+│   │   ├── dataset.jsonl
+│   │   ├── scorers.py
+│   │   └── run.py
+│   └── pyproject.toml
 ├── docs/
-│   └── architecture.md       # this file
+│   └── architecture.md      # this file
 ├── README.md
 └── .github/
     └── workflows/
@@ -357,6 +355,6 @@ These were open questions during design; defaults below are the design of record
 
 1. **Checkpointer:** `langgraph-checkpoint-postgres` against the same Supabase Postgres — no extra infra, proper per-user isolation.
 2. **Routing:** Next App Router. TanStack Router was overkill for this app and adds complexity.
-3. **Frontend deploy unit:** monorepo with `apps/web` + `apps/api` for portfolio readability.
+3. **Repo structure:** `client/` + `server/` at the repo root. No npm workspaces — each side is independent. Promote to a workspace if shared TS types or tooling become useful.
 4. **Model fallbacks:** skip `with_fallbacks` for v1; add when needed.
 5. **PDF export:** client-side `react-to-print` for v1; revisit if styling diverges.
