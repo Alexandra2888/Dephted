@@ -1,10 +1,9 @@
-import { notFound } from "next/navigation"
 import { LessonPage } from "@/components/lesson/lesson-page"
+import { MOCK_LESSONS } from "@/lib/mock/lesson-detail"
 import type { LessonData } from "@/lib/types"
 
-// TODO: fetch from API once BE is ready
 async function getLessonData(id: string): Promise<LessonData | null> {
-  return null
+  return MOCK_LESSONS[id] ?? null
 }
 
 export default async function LessonRoute({
@@ -14,15 +13,6 @@ export default async function LessonRoute({
 }) {
   const { id } = await params
   const data = await getLessonData(id)
-
-  if (!data) {
-    return (
-      <LessonPage
-        sessionId={id}
-        initialData={null}
-      />
-    )
-  }
 
   return <LessonPage sessionId={id} initialData={data} />
 }
