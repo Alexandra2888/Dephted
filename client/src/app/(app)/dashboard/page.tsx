@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { TopicGrid } from "@/components/dashboard/topic-grid"
-import { NewSessionInput } from "./new-session-input"
+import { NewSessionInput } from "@/components/dashboard/new-session-input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BrandMark } from "@/components/shared/brand-mark"
 import { MOCK_DASHBOARD } from "@/lib/mock/lessons"

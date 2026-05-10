@@ -2,7 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { BrandMark } from "@/components/shared/brand-mark"
 import { createClient } from "@/lib/supabase/server"
-import { NavUser } from "./nav-user"
+import { NavUser } from "@/components/layout/nav-user"
 
 export default async function AppLayout({
   children,
