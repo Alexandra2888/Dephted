@@ -2,7 +2,7 @@ from functools import lru_cache
 from typing import Annotated
 
 from pydantic import BeforeValidator, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 def _csv_to_list(v: str | list[str]) -> list[str]:
@@ -11,7 +11,7 @@ def _csv_to_list(v: str | list[str]) -> list[str]:
     return [s.strip() for s in v.split(",") if s.strip()]
 
 
-CsvList = Annotated[list[str], BeforeValidator(_csv_to_list)]
+CsvList = Annotated[list[str], NoDecode, BeforeValidator(_csv_to_list)]
 
 
 class Settings(BaseSettings):

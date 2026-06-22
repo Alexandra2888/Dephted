@@ -8,7 +8,7 @@ See [`../docs/architecture.md`](../docs/architecture.md) §§5–11 for the agen
 
 **Phase A scaffold.** The HTTP surface is declared but most endpoints return `501 Not Implemented`. Working endpoints today:
 
-- `GET /healthz` — liveness probe (no auth)
+- `GET /health` — liveness probe (no auth)
 - `GET /me` — current user from Supabase JWT (auth required)
 
 `/docs` shows the full surface (9 endpoints).
@@ -27,7 +27,7 @@ Then open http://localhost:8000/docs.
 Smoke test:
 
 ```
-curl -i localhost:8000/healthz                                  # 200
+curl -i localhost:8000/health                                  # 200
 curl -i localhost:8000/me                                       # 401 (no token)
 curl -i localhost:8000/me -H "Authorization: Bearer <jwt>"      # 200 with valid token
 ```
@@ -62,7 +62,7 @@ server/
 ├── deps.py             # get_current_user (Supabase JWT, HS256)
 ├── logging_config.py   # structlog setup
 ├── routers/
-│   ├── health.py       # GET /healthz
+│   ├── health.py       # GET /health
 │   ├── me.py           # GET /me
 │   ├── session.py      # POST /session/{start,answer,hint,end}, GET /session/{id}
 │   └── user.py         # GET /user/{memory,sessions}
