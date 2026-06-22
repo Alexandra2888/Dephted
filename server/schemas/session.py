@@ -55,6 +55,13 @@ class SessionAnswerRequest(BaseModel):
     answer: str
 
 
+class SessionStreamRequest(BaseModel):
+    session_id: str
+    # None / omitted = drive the initial leg (theory); otherwise the learner's
+    # comprehension answer or problem solution to resume the graph with.
+    input: str | None = None
+
+
 class SessionHintRequest(BaseModel):
     session_id: str
 

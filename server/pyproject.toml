@@ -11,6 +11,17 @@ dependencies = [
     "pyjwt[crypto]>=2.10",
     "structlog>=24.4",
     "python-multipart>=0.0.20",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "sse-starlette>=2.1",
+    "langgraph>=0.2.50",
+    "langgraph-checkpoint-postgres>=2.0",
+    "psycopg[binary,pool]>=3.2",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+    "langchain-anthropic>=0.3",
+    "arize-phoenix-otel>=0.6",
+    "openinference-instrumentation-langchain>=0.1.29",
 ]
 
 [dependency-groups]
@@ -40,7 +51,7 @@ no_implicit_optional = true
 ignore_missing_imports = false
 
 [[tool.mypy.overrides]]
-module = ["jwt.*"]
+module = ["jwt.*", "asyncpg.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

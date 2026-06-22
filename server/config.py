@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     allowed_origins: CsvList = Field(default_factory=lambda: ["http://localhost:3000"])
     log_level: str = "INFO"
 
+    # Phoenix (Arize) tracing — optional; tracing is skipped if no endpoint is set.
+    phoenix_collector_endpoint: str = ""
+    phoenix_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
