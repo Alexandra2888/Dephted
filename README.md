@@ -91,7 +91,7 @@ details (endpoints, agents, evals, deploy) are in [`server/README.md`](server/RE
 │       ├── app/             # authed shell, auth, lesson, dashboard
 │       ├── components/      # dashboard, lesson, shared, ui, logo
 │       ├── lib/             # supabase, api client, mock data, utils
-│       └── middleware.ts    # Supabase JWT cookie refresh
+│       └── proxy.ts         # Supabase JWT cookie refresh (Next 16 proxy convention)
 ├── server/                # FastAPI backend (placeholder, see server/README.md)
 ├── docs/
 │   └── architecture.md    # full system design
