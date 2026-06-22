@@ -1,51 +1,39 @@
 "use client"
 
 import { useState } from "react"
-import { sessionsApi } from "@/lib/api/sessions"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { CodeBlock } from "@/components/shared/code-block"
-import type { LessonStep } from "@/lib/types"
+import { Prose } from "@/components/shared/prose"
+import { StreamingCursor } from "@/components/shared/streaming-cursor"
 
 interface StepProblemProps {
-  step: LessonStep | null
-  sessionId: string
-  onComplete: (step: LessonStep) => void
+  problem: string
+  streaming: boolean
+  solution: string
+  canSubmit: boolean
+  busy: boolean
+  onSubmit: (code: string) => void
+  onHint: () => Promise<string>
 }
 
-export function StepProblem({ step, sessionId, onComplete }: StepProblemProps) {
-  const [code, setCode] = useState(step?.code ?? "")
-  const [loading, setLoading] = useState(false)
-  const [hinting, setHinting] = useState(false)
+export function StepProblem({
+  problem,
+  streaming,
+  solution,
+  canSubmit,
+  busy,
+  onSubmit,
+  onHint,
+}: StepProblemProps) {
+  const [code, setCode] = useState("")
   const [hint, setHint] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const submitted = !!step?.code && step.gaps !== undefined
-
-  async function handleSubmit() {
-    if (!code.trim()) return
-    setLoading(true)
-    setError(null)
-    try {
-      await sessionsApi.answer(sessionId, code.trim())
-      onComplete({
-        type: "problem",
-        content: step?.content ?? "",
-        code: code.trim(),
-        gaps: [],
-      })
-    } catch {
-      setError("something went wrong, try again")
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [hinting, setHinting] = useState(false)
 
   async function handleHint() {
     setHinting(true)
     try {
-      const res = await sessionsApi.hint(sessionId)
-      setHint(res.hint)
+      setHint(await onHint())
     } catch {
       // silent
     } finally {
@@ -55,7 +43,10 @@ export function StepProblem({ step, sessionId, onComplete }: StepProblemProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      {step?.content && <CodeBlock code={step.content} language="python" />}
+      <div>
+        {problem ? <Prose text={problem} /> : null}
+        {streaming && <StreamingCursor />}
+      </div>
 
       {hint && (
         <div className="font-mono text-[11px] text-muted-foreground px-3.5 py-2.5 rounded-md bg-muted/50 border border-border">
@@ -64,27 +55,17 @@ export function StepProblem({ step, sessionId, onComplete }: StepProblemProps) {
         </div>
       )}
 
-      {submitted ? (
-        <div className="flex flex-col gap-2">
-          <div className="font-mono text-[11px] tracking-[0.06em] text-subtle-foreground">
-            YOUR SOLUTION
-          </div>
-          <CodeBlock code={step!.code!} language="python" />
-        </div>
-      ) : (
+      {canSubmit ? (
         <div className="flex flex-col gap-2.5">
           <Textarea
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="def your_solution(...):"
             spellCheck={false}
-            disabled={loading}
+            disabled={busy}
             rows={10}
             className="bg-card-elevated border-border focus-visible:border-primary/40 focus-visible:ring-0 px-3.5 py-3 text-[13px] font-mono leading-[1.7] resize-y"
           />
-          {error && (
-            <p className="font-mono text-[11px] text-destructive">{error}</p>
-          )}
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -96,14 +77,23 @@ export function StepProblem({ step, sessionId, onComplete }: StepProblemProps) {
             </button>
             <Button
               variant="violet"
-              onClick={handleSubmit}
-              disabled={loading || !code.trim()}
+              onClick={() => code.trim() && onSubmit(code.trim())}
+              disabled={busy || !code.trim()}
               className="h-9 px-4 text-xs"
             >
-              {loading ? "submitting…" : "submit →"}
+              {busy ? "submitting…" : "submit →"}
             </Button>
           </div>
         </div>
+      ) : (
+        solution && (
+          <div className="flex flex-col gap-2">
+            <div className="font-mono text-[11px] tracking-[0.06em] text-subtle-foreground">
+              YOUR SOLUTION
+            </div>
+            <CodeBlock code={solution} language="python" />
+          </div>
+        )
       )}
     </div>
   )

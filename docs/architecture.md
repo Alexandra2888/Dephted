@@ -199,7 +199,9 @@ The frontend consumes `text/event-stream` and routes events by `type`:
 Supabase is the **single backing store** for the entire system:
 
 - **Auth** — Supabase Auth (email/password + OAuth).
-- **Application data** — Postgres tables, accessed via Drizzle ORM.
+- **Application data** — Postgres tables. _Implementation note: the original design named
+  Drizzle, but Drizzle is JS-only; the Python API uses **SQLAlchemy 2.x (async)** with
+  asyncpg. Schema lives in `server/models.py` + `server/migrations/`._
 - **LangGraph checkpoints** — `langgraph-checkpoint-postgres` configured against the same Postgres instance, so per-user graph state lives next to the application data with no extra infra.
 
 ### 9.1 Schema
@@ -287,7 +289,7 @@ Hand-curated golden set: 30 sessions across 5 backend topics (HTTP basics, REST 
 | Eval framework    | Build minimal pytest loop           | 50 lines beats adopting a framework prematurely                         |
 | Auth              | Buy Supabase                        | Free tier covers it; SSR helper exists for Next                         |
 | DB                | Buy Supabase Postgres               | Same provider as Auth; pgvector available if RAG comes later            |
-| ORM               | Build with Drizzle                  | Type-safe SQL; small surface                                            |
+| ORM               | SQLAlchemy 2.x async (Python API)   | Drizzle is JS-only; SQLAlchemy is the Python equivalent, typed + async  |
 | Prompts           | Build with Git                      | Prompts in `prompts/*.md`, versioned in repo                            |
 | Guardrails        | Build minimal                       | Domain-specific (no off-topic content); OpenAI moderation as a backstop |
 | UI components     | Buy shadcn/ui (compose)             | Standard primitives, customizable                                       |

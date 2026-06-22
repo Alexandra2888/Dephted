@@ -1,14 +1,21 @@
-import { Suspense } from "react"
-import { TopicGrid } from "@/components/dashboard/topic-grid"
 import { NewSessionInput } from "@/components/dashboard/new-session-input"
-import { Skeleton } from "@/components/ui/skeleton"
+import { DashboardGrid } from "@/components/dashboard/dashboard-grid"
 import { BrandMark } from "@/components/shared/brand-mark"
-import { MOCK_DASHBOARD } from "@/lib/mock/lessons"
+import { serverApi } from "@/lib/api/server"
+import type { DashboardData } from "@/lib/types"
 
-export default function DashboardPage() {
-  // mock-derived counts; replaced when topic-grid switches to API data
-  const covered = MOCK_DASHBOARD.topics.filter((t) => t.status === "covered").length
-  const struggling = MOCK_DASHBOARD.topics.filter((t) => t.status === "struggling").length
+export const dynamic = "force-dynamic"
+
+export default async function DashboardPage() {
+  let data: DashboardData = { suggested_next: null, topics: [] }
+  try {
+    data = await serverApi.dashboard()
+  } catch {
+    // backend unreachable — render the empty state and let the user start a session
+  }
+
+  const covered = data.topics.filter((t) => t.status === "covered").length
+  const struggling = data.topics.filter((t) => t.status === "struggling").length
 
   return (
     <div className="flex flex-col gap-12">
@@ -24,22 +31,7 @@ export default function DashboardPage() {
 
       <NewSessionInput />
 
-      <Suspense fallback={<TopicGridSkeleton />}>
-        <TopicGrid />
-      </Suspense>
-    </div>
-  )
-}
-
-function TopicGridSkeleton() {
-  return (
-    <div className="flex flex-col gap-8">
-      <Skeleton className="h-24 rounded-[10px]" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-[110px] rounded-[10px]" />
-        ))}
-      </div>
+      <DashboardGrid initialData={data} />
     </div>
   )
 }

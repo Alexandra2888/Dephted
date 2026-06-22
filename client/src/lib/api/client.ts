@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client"
+import type { SSEEvent } from "@/lib/types"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!
 
@@ -32,31 +33,52 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json()
 }
 
-export function apiStream(
+/**
+ * Consume a `text/event-stream` SSE endpoint, parsing each `data:` line as a typed
+ * {@link SSEEvent} and dispatching it to `onEvent`. Resolves when the stream closes.
+ */
+export async function streamSSE(
   path: string,
   body: unknown,
-  onChunk: (chunk: string) => void,
-  onDone: () => void
+  onEvent: (event: SSEEvent) => void,
 ): Promise<void> {
-  return getAuthHeaders().then((headers) =>
-    fetch(`${API_URL}${path}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    }).then(async (res) => {
-      if (!res.ok || !res.body) throw new Error(`Stream ${path} failed`)
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  })
+  if (!res.ok || !res.body) throw new Error(`Stream ${path} failed: ${res.status}`)
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const text = decoder.decode(value, { stream: true })
-        text.split("\n")
-          .filter((line) => line.startsWith("data: "))
-          .forEach((line) => onChunk(line.slice(6)))
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  const flush = (chunk: string) => {
+    buffer += chunk
+    // SSE events are separated by a blank line; each event may have multiple
+    // `data:` lines that concatenate.
+    let sep: number
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const raw = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      const data = raw
+        .split("\n")
+        .filter((l) => l.startsWith("data:"))
+        .map((l) => l.slice(5).replace(/^ /, ""))
+        .join("")
+      if (!data) continue
+      try {
+        onEvent(JSON.parse(data) as SSEEvent)
+      } catch {
+        // ignore keep-alives / non-JSON comments
       }
-      onDone()
-    })
-  )
+    }
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    flush(decoder.decode(value, { stream: true }))
+  }
 }

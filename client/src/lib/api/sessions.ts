@@ -1,15 +1,19 @@
-import { apiGet, apiPost, apiStream } from "./client"
-import type { LessonData, DashboardData } from "@/lib/types"
+import { apiGet, apiPost, streamSSE } from "./client"
+import type { DashboardData, LessonData, SSEEvent } from "@/lib/types"
 
 export const sessionsApi = {
   start: (topic: string) =>
     apiPost<{ session_id: string }>("/session/start", { topic }),
 
-  answer: (session_id: string, answer: string) =>
-    apiPost<{ next_step: string; verdict?: "passed" | "failed" }>(
-      "/session/answer",
-      { session_id, answer }
-    ),
+  /**
+   * Drive the agent graph over SSE. `input` is null to generate the first theory
+   * section, otherwise the learner's comprehension answer or problem solution.
+   */
+  stream: (
+    session_id: string,
+    input: string | null,
+    onEvent: (event: SSEEvent) => void,
+  ) => streamSSE("/session/stream", { session_id, input }, onEvent),
 
   hint: (session_id: string) =>
     apiPost<{ hint: string }>("/session/hint", { session_id }),
@@ -17,15 +21,7 @@ export const sessionsApi = {
   end: (session_id: string) =>
     apiPost<void>("/session/end", { session_id }),
 
-  get: (session_id: string) =>
-    apiGet<LessonData>(`/session/${session_id}`),
-
-  streamAnswer: (
-    session_id: string,
-    answer: string,
-    onChunk: (chunk: string) => void,
-    onDone: () => void
-  ) => apiStream("/session/answer", { session_id, answer }, onChunk, onDone),
+  get: (session_id: string) => apiGet<LessonData>(`/session/${session_id}`),
 }
 
 export const userApi = {

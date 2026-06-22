@@ -19,6 +19,20 @@ export default async function AppLayout({
         <Link href="/dashboard" className="flex items-center">
           <BrandMark />
         </Link>
+        <nav className="flex items-center gap-4 ml-2">
+          <Link
+            href="/dashboard"
+            className="font-mono text-xs text-subtle-foreground hover:text-foreground transition-colors"
+          >
+            dashboard
+          </Link>
+          <Link
+            href="/history"
+            className="font-mono text-xs text-subtle-foreground hover:text-foreground transition-colors"
+          >
+            history
+          </Link>
+        </nav>
         <div className="flex-1" />
         <NavUser email={user.email ?? ""} />
       </header>

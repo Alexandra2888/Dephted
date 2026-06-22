@@ -74,3 +74,13 @@
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+
+/* PDF export — print only the lesson artifact, expanded and high-contrast. */
+@media print {
+  header { display: none !important; }
+  .print\:hidden { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  pre, code { white-space: pre-wrap !important; word-break: break-word; }
+  .streaming-cursor, .cursor-blink { display: none !important; }
+}

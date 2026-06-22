@@ -14,7 +14,13 @@ The pedagogical core is Socratic: explain a concept, gate progress on a comprehe
 
 ## Status
 
-Frontend in progress; backend in design. See [`docs/architecture.md`](docs/architecture.md) for the full system design.
+v1 implemented end-to-end: Next.js frontend + FastAPI/LangGraph backend with the full
+Theory → Check → Problem → Feedback loop over SSE, Supabase auth + Postgres persistence,
+Phoenix tracing, and an LLM-judged eval gate. See [`docs/architecture.md`](docs/architecture.md)
+for the system design and [`plan.md`](plan.md) for the build punch list.
+
+**Deployed:** web `https://<your-vercel-app>.vercel.app` · api `https://depthed-api.fly.dev`
+_(fill in after deploying — see the deploy sections below)._
 
 ## Stack
 
@@ -24,9 +30,10 @@ Frontend in progress; backend in design. See [`docs/architecture.md`](docs/archi
 | Styling      | Tailwind CSS + shadcn/ui                              |
 | Server state | TanStack Query                                        |
 | Auth         | Supabase SSR                                          |
-| DB           | Supabase Postgres (Drizzle ORM)                       |
+| DB           | Supabase Postgres (SQLAlchemy 2.x async on the API)   |
 | Highlighting | react-syntax-highlighter                              |
-| Backend      | FastAPI + LangGraph (planned, see RFC)                |
+| Backend      | FastAPI + LangGraph                                    |
+| Checkpointer | langgraph-checkpoint-postgres                          |
 | Agents       | OpenAI (`gpt-4o`, `gpt-4o-mini`) + Anthropic (Sonnet) |
 | Tracing      | Phoenix (Arize)                                       |
 | Streaming    | SSE                                                   |
@@ -51,6 +58,19 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+### Backend (`server/`)
+
+```
+cd server
+cp .env.example .env       # fill Supabase + model keys + DATABASE_URL (session pooler)
+uv sync
+uv run python -m migrations.run      # create app tables
+uv run uvicorn main:app --reload --port 8000
+```
+
+Set `client/.env.local`'s `NEXT_PUBLIC_API_URL` to `http://localhost:8000`. Full backend
+details (endpoints, agents, evals, deploy) are in [`server/README.md`](server/README.md).
 
 ## Environment
 

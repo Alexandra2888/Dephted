@@ -58,3 +58,19 @@ export interface DashboardData {
   suggested_next: TopicCard | null
   topics: TopicCard[]
 }
+
+// SSE envelope from the backend graph (see server docs/architecture.md §8).
+export type LessonSection = "theory" | "check" | "problem" | "feedback"
+
+export type SSEEvent =
+  | { type: "section_start"; section: LessonSection }
+  | { type: "token"; section: LessonSection; data: string }
+  | {
+      type: "section_complete"
+      section: LessonSection
+      verdict?: "passed" | "failed"
+      data?: string
+    }
+  | { type: "tool_call"; data?: string }
+  | { type: "done"; status: "complete" | "waiting"; next?: string }
+  | { type: "error"; data: string }
