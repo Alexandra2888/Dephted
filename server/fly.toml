@@ -1,32 +1,31 @@
-# fly.toml — depthed API. Deploy: `fly launch --no-deploy` then `fly deploy`.
-# Set secrets first:
-#   fly secrets set SUPABASE_URL=... SUPABASE_JWT_SECRET=... SUPABASE_SERVICE_ROLE_KEY=... \
-#     DATABASE_URL=... OPENAI_API_KEY=... ANTHROPIC_API_KEY=... \
-#     PHOENIX_COLLECTOR_ENDPOINT=... PHOENIX_API_KEY=... ALLOWED_ORIGINS=https://<your-vercel-app>
+# fly.toml app configuration file generated for dephted on 2026-06-27T09:18:53Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "depthed-api"
-primary_region = "cdg"
+app = 'dephted'
+primary_region = 'ams'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  LOG_LEVEL = "INFO"
+  LOG_LEVEL = 'INFO'
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
   [[http_service.checks]]
-    method = "GET"
-    path = "/health"
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
