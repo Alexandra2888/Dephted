@@ -1,0 +1,22 @@
+name: keepalive
+
+# Supabase pauses free-tier projects after ~7 days of inactivity. This pings the
+# database on a schedule so it never goes idle. Runs in the cloud, so it works
+# even when no dev machine is on.
+on:
+  schedule:
+    # Daily at 06:00 UTC. Daily (well under the 7-day window) absorbs GitHub's
+    # occasional skipped/delayed scheduled runs under load.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Supabase Postgres
+        env:
+          # Session pooler URL (port 5432). Add it under
+          # Settings → Secrets and variables → Actions → New repository secret.
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: psql "$DATABASE_URL?sslmode=require" -c "select now() as keepalive;"
