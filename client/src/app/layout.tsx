@@ -27,7 +27,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${dmsans.variable} ${spaceMono.variable}`}>
+    <html
+      lang="en"
+      className={`dark ${dmsans.variable} ${spaceMono.variable}`}
+      suppressHydrationWarning
+    >
       <body className="min-h-screen bg-background text-foreground font-sans antialiased">
         <Providers>{children}</Providers>
       </body>
