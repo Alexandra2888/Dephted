@@ -1,0 +1,9 @@
+<svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="depthed">
+  <style>
+    @keyframes depthed-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    .depthed-cursor { animation: depthed-blink 1.1s step-end infinite; }
+  </style>
+  <rect width="52" height="52" rx="10" fill="#1e1e1e" />
+  <text x="8" y="36" font-family="monospace" font-size="26" font-weight="700" fill="#ffffff">d</text>
+  <rect class="depthed-cursor" x="30" y="13" width="8" height="18" rx="1.5" fill="#ffffff" />
+</svg>
