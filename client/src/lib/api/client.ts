@@ -1,36 +1,38 @@
-import { createClient } from "@/lib/supabase/client"
-import type { SSEEvent } from "@/lib/types"
+import { createClient } from "@/lib/supabase/client";
+import type { SSEEvent } from "@/lib/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL!
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!session) throw new Error("No active session")
+  if (!session) throw new Error("No active session");
 
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${session.access_token}`,
-  }
+  };
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const headers = await getAuthHeaders()
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers,
     body: body ? JSON.stringify(body) : undefined,
-  })
-  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`)
-  return res.json()
+  });
+  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
+  return res.json();
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const headers = await getAuthHeaders()
-  const res = await fetch(`${API_URL}${path}`, { headers })
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
-  return res.json()
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_URL}${path}`, { headers });
+  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  return res.json();
 }
 
 /**
@@ -42,43 +44,44 @@ export async function streamSSE(
   body: unknown,
   onEvent: (event: SSEEvent) => void,
 ): Promise<void> {
-  const headers = await getAuthHeaders()
+  const headers = await getAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
-  })
-  if (!res.ok || !res.body) throw new Error(`Stream ${path} failed: ${res.status}`)
+  });
+  if (!res.ok || !res.body)
+    throw new Error(`Stream ${path} failed: ${res.status}`);
 
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
 
   const flush = (chunk: string) => {
-    buffer += chunk
+    buffer += chunk.replace(/\r/g, "");
     // SSE events are separated by a blank line; each event may have multiple
     // `data:` lines that concatenate.
-    let sep: number
+    let sep: number;
     while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      const raw = buffer.slice(0, sep)
-      buffer = buffer.slice(sep + 2)
+      const raw = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
       const data = raw
         .split("\n")
         .filter((l) => l.startsWith("data:"))
         .map((l) => l.slice(5).replace(/^ /, ""))
-        .join("")
-      if (!data) continue
+        .join("");
+      if (!data) continue;
       try {
-        onEvent(JSON.parse(data) as SSEEvent)
+        onEvent(JSON.parse(data) as SSEEvent);
       } catch {
         // ignore keep-alives / non-JSON comments
       }
     }
-  }
+  };
 
   for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    flush(decoder.decode(value, { stream: true }))
+    const { done, value } = await reader.read();
+    if (done) break;
+    flush(decoder.decode(value, { stream: true }));
   }
 }
