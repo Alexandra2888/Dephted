@@ -6,6 +6,8 @@ Two nodes:
   owns the comprehension gate per architecture §6.2–6.3.)
 """
 
+import re
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
@@ -13,6 +15,10 @@ from agents._util import chunk_text, extract_check_question
 from agents.llms import anthropic_llm
 from agents.state import LessonState
 from prompts import load_prompt
+
+# The grader replies with PASSED / FAILED on the first line; match the verdict token
+# anywhere so leading decoration (**PASSED**, "PASSED", quotes) doesn't misgrade.
+_VERDICT_RE = re.compile(r"\b(passed|failed)\b", flags=re.IGNORECASE)
 
 
 async def theory_explain(state: LessonState) -> dict[str, object]:
@@ -81,7 +87,8 @@ async def comprehension(state: LessonState) -> dict[str, object]:
     ]
     response = await llm.ainvoke(messages)
     body = response.content if isinstance(response.content, str) else str(response.content)
-    verdict = "passed" if body.strip().upper().startswith("PASSED") else "failed"
+    match = _VERDICT_RE.search(body)
+    verdict = match.group(1).lower() if match else "failed"
 
     attempts = state.get("attempts", 0) + (0 if verdict == "passed" else 1)
     writer(

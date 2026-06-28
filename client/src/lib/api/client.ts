@@ -84,7 +84,13 @@ export async function streamSSE(
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        // Drain any buffered bytes, then terminate a trailing event that wasn't
+        // followed by a blank line so the final done/error event isn't dropped.
+        flush(decoder.decode());
+        flush("\n\n");
+        break;
+      }
       flush(decoder.decode(value, { stream: true }));
     }
   } finally {

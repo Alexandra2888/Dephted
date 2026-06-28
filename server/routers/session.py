@@ -26,6 +26,7 @@ from models import Message as MessageModel
 from models import Session as SessionModel
 from models import Trace as TraceModel
 from models import UserMemory as UserMemoryModel
+from ratelimit import RateLimitedUserDep
 from schemas.session import (
     LessonData,
     SessionEndRequest,
@@ -70,7 +71,7 @@ async def _memory_for_topic(
 
 @router.post("/start", response_model=SessionStartResponse)
 async def start(
-    body: SessionStartRequest, user: CurrentUserDep, db: DbDep
+    body: SessionStartRequest, user: RateLimitedUserDep, db: DbDep
 ) -> SessionStartResponse:
     row = SessionModel(user_id=uuid.UUID(user.user_id), topic=body.topic, status="active")
     db.add(row)
@@ -129,7 +130,7 @@ async def _event_stream(
 
 @router.post("/stream")
 async def stream(
-    body: SessionStreamRequest, user: CurrentUserDep, db: DbDep
+    body: SessionStreamRequest, user: RateLimitedUserDep, db: DbDep
 ) -> EventSourceResponse:
     row = await _load_owned_session(db, body.session_id, user.user_id)
     return EventSourceResponse(
@@ -139,7 +140,7 @@ async def stream(
 
 @router.post("/hint", response_model=SessionHintResponse)
 async def hint(
-    body: SessionHintRequest, user: CurrentUserDep, db: DbDep
+    body: SessionHintRequest, user: RateLimitedUserDep, db: DbDep
 ) -> SessionHintResponse:
     row = await _load_owned_session(db, body.session_id, user.user_id)
     snap = await get_graph().aget_state(thread_config(str(row.id)))

@@ -35,16 +35,25 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/signup");
 
-  if (!user && !isAuthRoute) {
+  // The PKCE code-exchange handler must run even without a session yet.
+  const isCallback = request.nextUrl.pathname.startsWith("/auth");
+
+  // Carry any refreshed auth cookies (set on supabaseResponse by getUser) onto
+  // the redirect response so a just-rotated token isn't dropped.
+  const redirectTo = (pathname: string) => {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    url.pathname = pathname;
+    const redirect = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+    return redirect;
+  };
+
+  if (!user && !isAuthRoute && !isCallback) {
+    return redirectTo("/login");
   }
 
   if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return redirectTo("/dashboard");
   }
 
   return supabaseResponse;

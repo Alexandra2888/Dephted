@@ -31,7 +31,7 @@ export default async function DashboardPage() {
 
       <NewSessionInput />
 
-      <DashboardGrid initialData={data} />
+      <DashboardGrid initialData={data} fetchedAt={Date.now()} />
     </div>
   )
 }
