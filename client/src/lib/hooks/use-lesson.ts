@@ -84,6 +84,7 @@ export function useLesson(sessionId: string, initial: LessonData | null) {
   const [error, setError] = useState<string | null>(null)
   const buffers = useRef({ theory: "", problem: "", feedback: "" })
   const started = useRef(false)
+  const abort = useRef<AbortController | null>(null)
 
   const onEvent = useCallback((ev: SSEEvent) => {
     switch (ev.type) {
@@ -149,11 +150,16 @@ export function useLesson(sessionId: string, initial: LessonData | null) {
 
   const run = useCallback(
     async (input: string | null) => {
+      // Cancel any in-flight stream before starting a new one.
+      abort.current?.abort()
+      const controller = new AbortController()
+      abort.current = controller
       setError(null)
       setPhase("streaming")
       try {
-        await sessionsApi.stream(sessionId, input, onEvent)
+        await sessionsApi.stream(sessionId, input, onEvent, controller.signal)
       } catch (e) {
+        if (controller.signal.aborted) return // unmounted or superseded — drop silently
         setError(e instanceof Error ? e.message : "stream failed")
         setPhase("error")
       }
@@ -199,6 +205,10 @@ export function useLesson(sessionId: string, initial: LessonData | null) {
       else if (has("problem")) setPhase("awaiting_solution")
       else setPhase("awaiting_check")
     })
+
+    // Abort any in-flight stream on unmount so we don't leak the connection or
+    // call setState on an unmounted hook.
+    return () => abort.current?.abort()
   }, [initial, run])
 
   return { view, phase, error, submitAnswer, submitSolution, getHint }

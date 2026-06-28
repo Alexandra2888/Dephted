@@ -18,6 +18,8 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 
 from agents.curriculum import curriculum
 from agents.feedback import feedback_review
@@ -73,7 +75,7 @@ def compile_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> Lesso
 
 # ── App lifecycle ────────────────────────────────────────────────────────────
 
-_checkpointer_cm: object | None = None
+_pool: AsyncConnectionPool | None = None
 _compiled: LessonGraph | None = None
 
 
@@ -85,21 +87,41 @@ def _conn_string() -> str:
 
 
 async def setup_graph() -> LessonGraph:
-    """Open the Postgres checkpointer, run its migrations, compile the graph."""
-    global _checkpointer_cm, _compiled
-    cm = AsyncPostgresSaver.from_conn_string(_conn_string())
-    saver = await cm.__aenter__()
+    """Open the Postgres checkpointer, run its migrations, compile the graph.
+
+    The checkpointer is backed by a connection pool rather than a single shared
+    connection so concurrent lessons each check out their own connection (no
+    interleaved reads/writes on one socket) and a dropped connection is recycled
+    rather than wedging the whole process. ``prepare_threshold=None`` disables
+    server-side prepared statements, which the Supabase transaction pooler
+    (pgbouncer) does not keep alive across checkouts — the same reason
+    ``db.py`` sets ``statement_cache_size: 0`` for asyncpg.
+    """
+    global _pool, _compiled
+    pool = AsyncConnectionPool(
+        conninfo=_conn_string(),
+        min_size=1,
+        max_size=10,
+        open=False,
+        kwargs={
+            "autocommit": True,
+            "prepare_threshold": None,
+            "row_factory": dict_row,
+        },
+    )
+    await pool.open(wait=True)
+    saver = AsyncPostgresSaver(pool)
     await saver.setup()
-    _checkpointer_cm = cm
+    _pool = pool
     _compiled = compile_graph(saver)
     return _compiled
 
 
 async def teardown_graph() -> None:
-    global _checkpointer_cm, _compiled
-    if _checkpointer_cm is not None:
-        await _checkpointer_cm.__aexit__(None, None, None)  # type: ignore[attr-defined]
-        _checkpointer_cm = None
+    global _pool, _compiled
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
     _compiled = None
 
 

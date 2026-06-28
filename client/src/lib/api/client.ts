@@ -43,12 +43,14 @@ export async function streamSSE(
   path: string,
   body: unknown,
   onEvent: (event: SSEEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok || !res.body)
     throw new Error(`Stream ${path} failed: ${res.status}`);
@@ -79,9 +81,15 @@ export async function streamSSE(
     }
   };
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    flush(decoder.decode(value, { stream: true }));
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      flush(decoder.decode(value, { stream: true }));
+    }
+  } finally {
+    // Release the lock and tear down the underlying connection if the caller
+    // aborted (navigated away) mid-stream, instead of leaking it.
+    reader.cancel().catch(() => {});
   }
 }

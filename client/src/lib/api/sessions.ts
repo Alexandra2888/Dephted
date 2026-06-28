@@ -13,7 +13,8 @@ export const sessionsApi = {
     session_id: string,
     input: string | null,
     onEvent: (event: SSEEvent) => void,
-  ) => streamSSE("/session/stream", { session_id, input }, onEvent),
+    signal?: AbortSignal,
+  ) => streamSSE("/session/stream", { session_id, input }, onEvent, signal),
 
   hint: (session_id: string) =>
     apiPost<{ hint: string }>("/session/hint", { session_id }),
