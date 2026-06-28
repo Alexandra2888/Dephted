@@ -3,3 +3,4 @@ plan.md
 .next/
 node_modules/
 *.tsbuildinfo
+/docs/interview-guide.md
