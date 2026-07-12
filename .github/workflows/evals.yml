@@ -34,3 +34,32 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: uv run python -m evals.run --threshold 0.6 --anchor-threshold 1.0
+
+  # Separate job (not a step) so the adversarial report always runs, independent of the
+  # pedagogy suite's result.
+  adversarial:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # Soft gate: prints a per-category defended-rate table on every PR that can move agent
+      # behavior. Only categories in HARD_CATEGORIES (empty today) fail the build. Promote
+      # verdict_injection, prompt_leak, scope_abuse to blocking by editing that constant in
+      # server/evals/adversarial.py once their baselines are green.
+      - name: Run adversarial suite (soft gate)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: uv run python -m evals.adversarial --threshold 1.0
