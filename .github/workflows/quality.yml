@@ -1,0 +1,35 @@
+name: quality
+
+# Batch online-quality aggregation on a schedule (serving stays serving, batch stays batch).
+# Folds the three Phase 4 signals — deterministic (from cost_events/guardrail_events), the
+# sampled LLM judge (eval_scores), and human thumbs (session_feedback) — into one windowed
+# report, and fails the run if completion or judge score drifts below the configured floors.
+# Pure SQL aggregation: no model calls, so only the database secret is needed.
+on:
+  schedule:
+    - cron: "30 9 * * 1" # Mondays 09:30 UTC (just after the cost rollup)
+  workflow_dispatch: # allow manual runs
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Aggregate online quality (alert on drift)
+        env:
+          # Reuse the existing repo secret; the app reads it as DATABASE_URL (config.py).
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: uv run python -m evals.aggregate_quality --since 7 --alert

@@ -66,6 +66,11 @@ class SessionHintRequest(BaseModel):
     session_id: str
 
 
+class SessionFeedbackRequest(BaseModel):
+    session_id: str
+    rating: Literal["up", "down"]
+
+
 class SessionEndRequest(BaseModel):
     session_id: str
 

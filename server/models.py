@@ -151,6 +151,49 @@ class CostEvent(Base):
     )
 
 
+class EvalScore(Base):
+    """One judged dimension for one sampled session (Phase 4 online eval). Written out-of-band
+    after the response for the ``EVAL_SAMPLE_RATE`` fraction of completed sessions — the
+    LLM-judge leg of online eval (the deterministic leg is derived from ``cost_events`` /
+    ``guardrail_events`` at aggregation time). Reference-free: online there is no gold
+    reference, so the judges grade intrinsic quality. Correlated to a Phoenix trace via
+    ``trace_id`` and to a human thumb via ``session_id`` (see ``SessionFeedback``)."""
+
+    __tablename__ = "eval_scores"
+
+    id: Mapped[uuid.UUID] = _pk()
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), index=True
+    )
+    trace_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dimension: Mapped[str] = mapped_column(String(32))  # theory | problem | feedback | trajectory
+    score: Mapped[float] = mapped_column(Float)  # [0, 1]
+    model: Mapped[str] = mapped_column(String(48))  # judge model, or 'deterministic'
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+
+class SessionFeedback(Base):
+    """A learner's thumb on the feedback section (Phase 4 online eval). One row per session
+    (``session_id`` primary key — the latest vote wins), so it correlates 1:1 with a lesson.
+    Joined to ``EvalScore`` by ``session_id`` to answer the senior question about the judge:
+    does it agree with humans?"""
+
+    __tablename__ = "session_feedback"
+
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    rating: Mapped[str] = mapped_column(String(8))  # up | down
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class TheoryCache(Base):
     """Cached theory explanation (Phase 3) keyed by (topic, difficulty, prompt_version). Theory
     is deterministic-ish per topic+difficulty, so the expensive Sonnet call is skipped on repeat

@@ -112,6 +112,7 @@ export function LessonPage({ sessionId, initialData }: LessonPageProps) {
       {showFeedback && (
         <NumberedSection num="04" label="feedback">
           <StepFeedback
+            sessionId={sessionId}
             content={view.feedback}
             gaps={view.feedbackGaps}
             streaming={view.feedbackStreaming}

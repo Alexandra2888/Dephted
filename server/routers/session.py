@@ -14,7 +14,7 @@ from typing import Annotated, Any, cast
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from langchain_core.messages import HumanMessage, SystemMessage
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -41,12 +41,15 @@ from guards import budget as budget_guard
 from lessons import build_lesson_data, messages_from_state
 from models import Message as MessageModel
 from models import Session as SessionModel
+from models import SessionFeedback as SessionFeedbackModel
 from models import Trace as TraceModel
 from models import UserMemory as UserMemoryModel
+from online_eval import maybe_score_session
 from ratelimit import RateLimitedUserDep
 from schemas.session import (
     LessonData,
     SessionEndRequest,
+    SessionFeedbackRequest,
     SessionHintRequest,
     SessionHintResponse,
     SessionStartRequest,
@@ -75,17 +78,24 @@ HINT_CAP_MESSAGE = (
 @dataclass
 class GuardRun:
     """Collects guard decisions and cost events produced across one streamed request so a single
-    BackgroundTask can persist them after the response is sent (zero request-path latency)."""
+    BackgroundTask can persist them after the response is sent (zero request-path latency).
+    ``final_values`` is set only on the leg that reaches graph END — it carries the completed
+    lesson's checkpoint so the sampled online-eval judge can score it off the request path."""
 
     session_id: str
     trace_id: str | None = None
     decisions: list[GuardDecision] = field(default_factory=list)
     cost_rows: list[dict[str, Any]] = field(default_factory=list)
+    final_values: dict[str, Any] | None = None
 
 
 async def _persist_run(run: GuardRun) -> None:
     await persist_guard_decisions(run.session_id, run.trace_id, run.decisions)
     await persist_cost_events(run.session_id, run.trace_id, run.cost_rows)
+    # Online eval (Phase 4): on a completed session, sample-gate and run the LLM judge. A no-op
+    # unless this leg finalized and the session falls in the EVAL_SAMPLE_RATE bucket.
+    if run.final_values is not None:
+        await maybe_score_session(run.session_id, run.trace_id, run.final_values)
 
 
 async def _load_owned_session(
@@ -252,8 +262,10 @@ async def _event_stream(
                 run.decisions.append(decision_from_dict(scope_dec))
 
             if not snap.next:
-                await _finalize(session_id, dict(snap.values), trace_id)
+                final_values = dict(snap.values)
+                await _finalize(session_id, final_values, trace_id)
                 budget_guard.reset(sid)
+                run.final_values = final_values  # hand the completed lesson to the online-eval judge
                 yield {"data": json.dumps({"type": "done", "status": "complete"})}
             else:
                 yield {
@@ -399,6 +411,26 @@ def _meter_hint(
 async def end(body: SessionEndRequest, user: CurrentUserDep, db: DbDep) -> Response:
     row = await _load_owned_session(db, body.session_id, user.user_id)
     row.status = "completed"
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/feedback", status_code=status.HTTP_204_NO_CONTENT)
+async def feedback(
+    body: SessionFeedbackRequest, user: CurrentUserDep, db: DbDep
+) -> Response:
+    """Record the learner's thumb on the feedback section (Phase 4 online eval — the human
+    signal). One vote per session; re-voting overwrites. Correlated to the sampled LLM judge by
+    session_id so aggregate_quality can measure judge-vs-human agreement."""
+    row = await _load_owned_session(db, body.session_id, user.user_id)
+    await db.execute(
+        pg_insert(SessionFeedbackModel)
+        .values(session_id=row.id, rating=body.rating)
+        .on_conflict_do_update(
+            index_elements=[SessionFeedbackModel.session_id],
+            set_={"rating": body.rating, "updated_at": func.now()},
+        )
+    )
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

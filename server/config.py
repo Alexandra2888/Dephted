@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     hint_max_per_topic: int = 3  # hint cost cap; refuse further hints past this
     cost_alert_per_session_usd: float = 0.50  # aggregate CLI --alert drift threshold (< abort)
 
+    # Online eval (Phase 4). Deterministic signals ride free on 100% of traffic (derived from
+    # cost_events / guardrail_events). This gates only the sampled LLM-judge leg, which runs
+    # async off the request path — keep it low; it costs one judge pass per sampled session.
+    eval_sample_rate: float = 0.05  # fraction of completed sessions the LLM judge scores
+    # aggregate_quality --alert drift thresholds (a scheduled run fails when quality slips):
+    quality_min_completion_rate: float = 0.80  # reached-feedback rate floor
+    quality_min_judge_score: float = 0.60  # judge-overall floor (matches evals.run soft gate)
+    quality_judge_positive_threshold: float = 0.70  # judge mean >= this ⇒ "judge says good"
+
 
 @lru_cache
 def get_settings() -> Settings:

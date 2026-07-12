@@ -19,6 +19,10 @@ export const sessionsApi = {
   hint: (session_id: string) =>
     apiPost<{ hint: string }>("/session/hint", { session_id }),
 
+  /** Record the learner's thumb on the feedback section (Phase 4 online eval). */
+  feedback: (session_id: string, rating: "up" | "down") =>
+    apiPost<void>("/session/feedback", { session_id, rating }),
+
   end: (session_id: string) =>
     apiPost<void>("/session/end", { session_id }),
 

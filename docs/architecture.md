@@ -275,6 +275,16 @@ This is what turns the project from "shipped a thing" into "defined and maintain
 
 Hand-curated golden set: 30 sessions across 5 backend topics (HTTP basics, REST design, async, auth, databases). Every production failure becomes a new eval case.
 
+### 11.4 Online eval (Phase 4)
+
+The offline suite (§11.1–11.3) gates merges; online eval watches live traffic. Three signal sources, folded into one windowed report (`evals/aggregate_quality.py`, scheduled in `quality.yml`):
+
+- **Deterministic signals — 100% of traffic, free.** Trajectory completeness (reached feedback), re-explain rate, LLM-step count, cost/session, guardrail-trigger rate, and refusal rate are *derived* at aggregation time from the `cost_events` (Phase 3) and `guardrail_events` (Phase 2) already written — no new hot-path write.
+- **LLM judge on a sample.** `EVAL_SAMPLE_RATE` (default 5%) of completed sessions are scored by reference-free judges (`online_eval.py`), run inside the after-response `BackgroundTask` so they never touch the request path. Sampling is a pure hash of `session_id` (reproducible, RNG-free). Scores land in `eval_scores`. Reference-free because online there is no gold reference — the judges grade intrinsic quality, on the same `gpt-4o-mini` as the offline scorers so the numbers stay comparable.
+- **Human feedback.** A thumb on the feedback section (`POST /session/feedback` → `session_feedback`), correlated by `session_id`.
+
+The payoff is **judge-vs-human agreement**: for sessions with both a judge mean and a thumb, does the judge (mean ≥ threshold ⇒ "good") agree with the human? That is the senior answer to "how do you know your judge is right?" — and the number to watch as the sample rate rises. `aggregate_quality --alert` turns completion-rate / judge-score drift into a non-zero exit for the scheduled run.
+
 ---
 
 ## 12. Build vs buy
