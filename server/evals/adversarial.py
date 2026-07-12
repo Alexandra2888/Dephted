@@ -8,10 +8,13 @@ aggregated **per category** — one verdict-injection regression must not be dil
 pile of easy passes, so a category is never averaged against the others.
 
 Rollout discipline (red-first, per docs/adversarial-findings.md): the suite always prints a
-per-category defended-rate table, but only categories listed in `HARD_CATEGORIES` (empty
-today) can FAIL the build. This makes it a soft, report-only gate we can wire into CI now,
-before every category's baseline is pinned. Promote a category to blocking once its baseline
-is observed green across a few PRs — a reviewed one-line edit to that constant.
+per-category defended-rate table, but only categories listed in `HARD_CATEGORIES` can FAIL
+the build. Phase 2 closed four categories with deterministic, model-independent node fixes
+(verdict_injection, feedback_injection, empty_input, very_long_input), so those are now
+blocking; the still-model-held categories (prompt_leak, scope_abuse, topic_injection) remain
+report-only. Promote one of the remaining categories to blocking once a guard makes it
+deterministic and its baseline is observed green across a few PRs — a reviewed one-line edit
+to that constant.
 
 Usage:
     uv run python -m evals.adversarial                          # full suite (soft gate)

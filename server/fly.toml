@@ -10,6 +10,13 @@ primary_region = "cdg"
 [build]
   dockerfile = "Dockerfile"
 
+# Apply DB migrations in a one-off release machine (with this deploy's secrets, incl.
+# DATABASE_URL) before the new version serves traffic. migrations/run.py is idempotent and
+# tracks applied files in schema_migrations, so this is safe on every deploy; a failed
+# migration blocks the release rather than booting a broken version.
+[deploy]
+  release_command = "/app/.venv/bin/python -m migrations.run"
+
 [env]
   LOG_LEVEL = "INFO"
 

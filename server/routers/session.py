@@ -93,8 +93,12 @@ async def _persist_run(run: GuardRun) -> None:
     await persist_guard_decisions(run.session_id, run.trace_id, run.decisions)
     await persist_cost_events(run.session_id, run.trace_id, run.cost_rows)
     # Online eval (Phase 4): on a completed session, sample-gate and run the LLM judge. A no-op
-    # unless this leg finalized and the session falls in the EVAL_SAMPLE_RATE bucket.
-    if run.final_values is not None:
+    # unless this leg finalized and the session falls in the EVAL_SAMPLE_RATE bucket. Skip
+    # out-of-scope refusals (scope_ok=False) — the graph ends them with the fixed REFUSAL as
+    # theory_text and no feedback, so judging would score a correct refusal as ~0 theory quality
+    # and 0 trajectory, dragging down the quality dashboard. scope_ok defaults True so real
+    # lessons (which always set it True) are always scored.
+    if run.final_values is not None and run.final_values.get("scope_ok", True):
         await maybe_score_session(run.session_id, run.trace_id, run.final_values)
 
 

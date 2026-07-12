@@ -56,10 +56,12 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      # Soft gate: prints a per-category defended-rate table on every PR that can move agent
-      # behavior. Only categories in HARD_CATEGORIES (empty today) fail the build. Promote
-      # verdict_injection, prompt_leak, scope_abuse to blocking by editing that constant in
-      # server/evals/adversarial.py once their baselines are green.
+      # Prints a per-category defended-rate table on every PR that can move agent behavior.
+      # Categories in HARD_CATEGORIES fail the build; today those are the four Phase 2 closed
+      # deterministically: verdict_injection, feedback_injection, empty_input, very_long_input.
+      # The still-model-held categories (prompt_leak, scope_abuse, topic_injection) stay
+      # report-only — promote one to blocking by editing that constant in
+      # server/evals/adversarial.py once a guard makes it deterministic and its baseline is green.
       - name: Run adversarial suite (soft gate)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

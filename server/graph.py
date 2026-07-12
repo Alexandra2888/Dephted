@@ -2,9 +2,11 @@
 
 Routing (docs/architecture.md §6.6):
 
-    START → memory_read → curriculum → theory → [interrupt] comprehension
-            ├─ passed  → problem → [interrupt] feedback → memory_write → END
-            └─ failed  → theory (re-explain, capped) → ...
+    START → memory_read → curriculum → topic_guard
+            ├─ in-scope     → theory → [interrupt] comprehension
+            │                  ├─ passed → problem → [interrupt] feedback → memory_write → END
+            │                  └─ failed → theory (re-explain, capped) → ...
+            └─ out-of-scope → END (fixed refusal, never generated content)
 
 The graph is compiled with `interrupt_before=["comprehension", "feedback"]` so it pauses
 to wait for the learner's comprehension answer and problem solution across HTTP calls.
