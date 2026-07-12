@@ -16,8 +16,16 @@ The pedagogical core is Socratic: explain a concept, gate progress on a comprehe
 
 v1 implemented end-to-end: Next.js frontend + FastAPI/LangGraph backend with the full
 Theory → Check → Problem → Feedback loop over SSE, Supabase auth + Postgres persistence,
-Phoenix tracing, and an LLM-judged eval gate. See [`docs/architecture.md`](docs/architecture.md)
-for the system design and [`plan.md`](plan.md) for the build punch list.
+and Phoenix tracing. On top of the core loop, an **AI quality-and-safety layer**:
+composable guardrails (fail-open, shadow-first) with a scope-classifier node and typed
+verdicts, an adversarial red-team suite, an offline eval PR gate (deterministic anchors +
+LLM judges), online quality monitoring (sampled judge + human thumbs + judge-vs-human
+agreement), and per-session cost tracking with a theory cache.
+
+- [`docs/architecture.md`](docs/architecture.md) — system design (RFC)
+- [`docs/interview-guide.md`](docs/interview-guide.md) — implementation deep-dive + Q&A bank
+- [`docs/adversarial-findings.md`](docs/adversarial-findings.md) — red-team write-up
+- [`plan.md`](plan.md) — build punch list
 
 **Deployed:** web `https://<your-vercel-app>.vercel.app` · api `https://depthed-api.fly.dev`
 _(fill in after deploying — see the deploy sections below)._

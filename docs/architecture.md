@@ -58,10 +58,13 @@ Next.js Frontend (Vercel)
     ▼
 FastAPI Backend
     ├── Auth middleware (Supabase JWT validation)
+    ├── Guardrails (input/output, fail-open, shadow-first — §12)
+    ├── Cost collector (per-node token/cost, off-hot-path — §13)
     ├── Session router
     ├── History router
     └── LangGraph Orchestrator
             ├── Curriculum Agent      (gpt-4o-mini)
+            ├── Topic Guard           (gpt-4o-mini)  — scope screen, fixed refusal
             ├── Theory Agent          (claude-sonnet-4-6)
             ├── Problem Agent         (gpt-4o)
             ├── Feedback Agent        (claude-sonnet-4-6)
@@ -70,8 +73,8 @@ FastAPI Backend
                     ▼
             Supabase (Postgres + Auth + Checkpointer)
                     │
-                    ▼
-            Phoenix (Arize) — Tracing
+                    ├──► Phoenix (Arize) — Tracing
+                    └──► Eval pipeline — offline PR gate + online quality/cost rollups (§11)
 ```
 
 ---
@@ -119,9 +122,11 @@ Memory Agent (read)
   ↓
 Curriculum Agent
   ↓
+Topic Guard ──► out-of-scope ──► END (fixed refusal, content never generated)
+  ↓ (in-scope)
 Theory Agent ──► comprehension check
-  ↓ (passed)         ↓ (failed)
-Problem Agent     re-explain or simplify
+  ↓ (passed)         ↓ (failed, attempts < cap)
+Problem Agent     re-explain (capped, then advance)
   ↓
 Feedback Agent
   ↓
@@ -129,6 +134,9 @@ Memory Agent (write)
   ↓
 END
 ```
+
+Verdicts (comprehension pass/fail, feedback completed/struggling) are **typed `Literal`
+fields** via `with_structured_output`, not tokens scraped from prose — see §12.2.
 
 ---
 
@@ -238,6 +246,23 @@ id, session_id, phoenix_trace_id, created_at
 
 LangGraph checkpoint tables (`checkpoints`, `checkpoint_writes`, etc.) are managed by `langgraph-checkpoint-postgres` and live in the same database under their own schema.
 
+#### Telemetry / eval tables (migrations `0002`–`0005`)
+
+Added by the guardrails (§12), cost (§13), and online-eval (§11.4) phases. All idempotent
+and cascade-delete with their session; all **write-mostly**, populated off the request path
+and read only by the batch aggregators.
+
+```
+guardrail_events(session_id, trace_id, stage, guard_name, action, triggered,
+                 final_action, enforce, reason, score, latency_ms, created_at)
+cost_events(session_id, trace_id, node, model, input_tokens, output_tokens,
+            cost_usd, latency_ms, cache_hit, created_at)
+theory_cache(topic, difficulty, prompt_version, theory_text, hit_count, created_at)
+             UNIQUE(topic, difficulty, prompt_version)
+eval_scores(session_id, trace_id, dimension, score, model, created_at)
+session_feedback(session_id [PK], rating, created_at, updated_at)
+```
+
 ---
 
 ## 10. Tracing — Phoenix (Arize)
@@ -287,7 +312,87 @@ The payoff is **judge-vs-human agreement**: for sessions with both a judge mean 
 
 ---
 
-## 12. Build vs buy
+## 12. Guardrails & safety
+
+Guardrails are a **composable protocol**, not a scatter of `if` statements. A `Guard` is a
+`Protocol` (`guards/base.py`) with `name`, `stage` (`input`/`output`), `action`, and one
+`async check(ctx) -> GuardDecision`. A registry (`guards/registry.py`) composes them into
+ordered input/output lists; a single `run_guards(...)` runner executes them. Two policies are
+first-class:
+
+- **Fail-open.** Every guard runs inside `try/except`; a guard that raises is logged and
+  degraded to a non-triggering decision. Layered at the runner, the moderation call's own
+  timeout, and the persistence writer. Invariant: **a guard never breaks a lesson.**
+- **Shadow-first.** A single `guardrails_enforce` flag gates enforcement. Off (default):
+  every guard runs and every decision is persisted to `guardrail_events`, but nothing is
+  blocked — so each pattern's real firing rate is measured before it can reject a learner.
+
+### 12.1 The guards
+
+| Guard | Stage | Action | What it does |
+| ----- | ----- | ------ | ------------ |
+| Injection screen | input | BLOCK | Regex bank of override / verdict-forcing / prompt-leak phrasings (`guards/patterns.py`). Runs on the request path before any LLM. |
+| Length cap | input | BLOCK | Rejects oversized input before it reaches a paid model (cost/DoS). |
+| Prompt-leak | output | BLOCK | Detects grader/rubric fragments + prompt "canaries" in streamed output. |
+| Code-safety | output | **FLAG only** | Records `os.system`/`eval`/`rm -rf` sightings but never blocks — backend lessons legitimately discuss these. |
+| Toxicity | output | BLOCK | OpenAI `omni-moderation-latest`, prod-only, timeout-bounded, fails open. |
+| Budget | request leg | abort | In-process token/cost ledger per `session_id`; hard-stops a runaway before the next expensive graph run. Robust backstop is LangGraph's `recursion_limit`. |
+
+### 12.2 The structural controls (the ones that matter)
+
+The regex banks are a cheap first layer. The **real** defenses are structural and enforce
+regardless of the shadow flag:
+
+1. **`topic_guard` node.** A dedicated graph node (`agents/guard.py`, `prompts/guard.md`)
+   classifies the topic as in- or out-of-scope backend learning and emits a single
+   `IN_SCOPE`/`OUT_OF_SCOPE` token. It sits `curriculum → topic_guard → {theory | END}`.
+   Out-of-scope requests stream a **fixed refusal constant** and route to `END` — the Theory
+   agent never generates the requested content, so there is nothing to steer. Fails safe:
+   unparseable output defaults to `OUT_OF_SCOPE`. (This closed the scope-abuse breach in
+   `docs/adversarial-findings.md`, Finding 10.)
+2. **Typed verdicts.** Comprehension/feedback verdicts are `Literal` enum fields returned via
+   `with_structured_output` (`guards/verdict.py`) — not a token scraped from prose with a
+   regex. This **eliminates the verdict-injection bug class**: the graph's routing token
+   can't be injected into a typed field.
+
+### 12.3 Persistence
+
+Every decision (shadow or enforce) is written to `guardrail_events` (migration `0002`) by
+`persist_guard_decisions` (`guards/persistence.py`), which opens its own DB session and
+swallows all errors — telemetry must never break a request. Writes happen off the request
+path in a Starlette `BackgroundTask` after the response is sent. The table feeds the online
+quality/refusal-rate signals in §11.4 for free.
+
+---
+
+## 13. Cost monitoring & caching
+
+Per-session cost is a **first-class quality signal**, captured additively and off the hot
+path.
+
+- **Capture.** A `CostCollector` (`cost.py`) piggybacks on the LangGraph `messages` stream
+  the request already consumes, reads `usage_metadata` per node, prices it, and writes one
+  `cost_events` row per call (node, model, tokens, `cost_usd`, latency, `cache_hit`) in a
+  `BackgroundTask` after the response — zero request-path latency. The non-graph `/hint` call
+  is metered identically.
+- **One pricing table.** `pricing.py` maps node→model and model→rate; the runtime, the budget
+  guard (§12), and the offline evals (`evals/metrics.py`) all import it, so a rate change is a
+  one-line edit and cost is computed identically everywhere. Runtime never imports `evals`.
+- **Theory cache.** `theory_cache` (migration `0004`) keys on `(topic, difficulty,
+  prompt_version)`, where `prompt_version` is a SHA-256 of the theory prompt template itself —
+  editing the prompt self-invalidates the cache. Only first-attempt theory is cached
+  (re-explains stay fresh). A hit replaces an entire streamed **Sonnet** generation (the most
+  expensive model) with an instant, zero-token DB read, re-chunked to the same SSE event shape.
+  Writes use `on_conflict_do_nothing` (first writer wins); reads/writes fail open. Hit rate is
+  a tracked column.
+- **Closed loop.** `evals/aggregate_online.py` reports avg + p95 cost/session, cost per node,
+  and cache-hit rate; `cost.yml` (scheduled weekly) runs it with `--alert` against a
+  per-session USD threshold and fails the run on drift — catching prompt bloat or a re-explain
+  loop before the hard in-session budget ceiling ever trips.
+
+---
+
+## 14. Build vs buy
 
 | Component         | Decision                            | Why                                                                     |
 | ----------------- | ----------------------------------- | ----------------------------------------------------------------------- |
@@ -301,14 +406,14 @@ The payoff is **judge-vs-human agreement**: for sessions with both a judge mean 
 | DB                | Buy Supabase Postgres               | Same provider as Auth; pgvector available if RAG comes later            |
 | ORM               | SQLAlchemy 2.x async (Python API)   | Drizzle is JS-only; SQLAlchemy is the Python equivalent, typed + async  |
 | Prompts           | Build with Git                      | Prompts in `prompts/*.md`, versioned in repo                            |
-| Guardrails        | Build minimal                       | Domain-specific (no off-topic content); OpenAI moderation as a backstop |
+| Guardrails        | Build composable + structural       | Domain-specific scope screen + typed verdicts; OpenAI moderation as a backstop (see §12) |
 | UI components     | Buy shadcn/ui (compose)             | Standard primitives, customizable                                       |
 | Streaming         | Build over SSE                      | Simpler than WebSocket; FastAPI native                                  |
 | PDF export        | Buy react-to-print                  | Solved problem                                                          |
 
 ---
 
-## 13. Repo layout (target)
+## 15. Repo layout (as built)
 
 ```
 depthed/
@@ -321,30 +426,37 @@ depthed/
 │   └── package.json
 ├── server/                  # FastAPI backend
 │   ├── agents/
-│   │   ├── curriculum.py
-│   │   ├── theory.py
-│   │   ├── problem.py
-│   │   ├── feedback.py
-│   │   └── memory.py
+│   │   ├── curriculum.py  theory.py  problem.py  feedback.py  memory.py
+│   │   ├── guard.py         # topic-scope classifier node (§12.2)
+│   │   └── llms.py          # model routing
+│   ├── guards/              # composable guardrails (§12)
+│   │   ├── base.py  registry.py  patterns.py
+│   │   ├── input.py  output.py  verdict.py  budget.py
+│   │   └── persistence.py
+│   ├── cost.py  pricing.py  # cost collector + single pricing table (§13)
+│   ├── online_eval.py       # sampled reference-free judge (§11.4)
 │   ├── graph.py
-│   ├── routers/
-│   ├── prompts/             # *.md files
+│   ├── routers/             # session, user, me, health
+│   ├── prompts/             # *.md files (theory, feedback, guard, …)
 │   ├── evals/
-│   │   ├── dataset.jsonl
-│   │   ├── scorers.py
-│   │   └── run.py
+│   │   ├── dataset.jsonl  adversarial.jsonl
+│   │   ├── run.py  scorers.py  anchors.py  metrics.py  adversarial.py
+│   │   └── aggregate_quality.py  aggregate_online.py
+│   ├── migrations/          # 0001_init … 0005_online_eval
 │   └── pyproject.toml
 ├── docs/
-│   └── architecture.md      # this file
+│   ├── architecture.md      # this file
+│   ├── interview-guide.md   # implementation deep-dive + Q&A
+│   └── adversarial-findings.md
 ├── README.md
 └── .github/
     └── workflows/
-        └── evals.yml
+        └── evals.yml  quality.yml  cost.yml  keepalive.yml
 ```
 
 ---
 
-## 14. Definition of done (v1)
+## 16. Definition of done (v1)
 
 For interview-readiness as a portfolio piece — not feature-complete, not pretty, **shipped**:
 
@@ -361,7 +473,7 @@ Anything beyond this is v2.
 
 ---
 
-## 15. Resolved decisions
+## 17. Resolved decisions
 
 These were open questions during design; defaults below are the design of record for v1.
 
