@@ -20,6 +20,7 @@ dependencies = [
     "langchain-core>=0.3",
     "langchain-openai>=0.2",
     "langchain-anthropic>=0.3",
+    "openai>=1.54",
     "arize-phoenix-otel>=0.6",
     "openinference-instrumentation-langchain>=0.1.29",
 ]

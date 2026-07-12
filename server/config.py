@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     phoenix_collector_endpoint: str = ""
     phoenix_api_key: str = ""
 
+    # Guardrails (Phase 2). Shadow-first: with enforce off, every guard still runs and
+    # every decision is persisted, but responses are unchanged. Flip to true once the
+    # false-positive rate is calibrated on real traffic. (The structured-verdict fix in
+    # the graph nodes is NOT gated by this flag — it is an always-on bug fix.)
+    guardrails_enforce: bool = False
+    guardrail_max_input_chars: int = 4000  # == evals MAX_ANSWER_CHARS; caps stored answers
+    guardrail_max_steps_per_session: int = 24  # LangGraph recursion_limit — runaway-loop kill
+    guardrail_max_tokens_per_session: int = 120_000  # graceful abort ceiling
+    guardrail_max_cost_per_session: float = 1.00  # USD, graceful abort ceiling
+    guardrail_toxicity_enabled: bool = False  # OpenAI moderation — prod-only opt-in
+
 
 @lru_cache
 def get_settings() -> Settings:

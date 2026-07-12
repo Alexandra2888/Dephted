@@ -8,7 +8,16 @@ Supabase auth UUID (the JWT `sub` claim). LangGraph checkpoint tables are manage
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -84,6 +93,34 @@ class Trace(Base):
         UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), index=True
     )
     phoenix_trace_id: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+
+class GuardrailEvent(Base):
+    """One row per guard decision (Phase 2). Written out-of-band via BackgroundTask; used to
+    calibrate thresholds and measure the false-positive rate during the shadow rollout.
+    Correlated to a Phoenix trace via ``trace_id`` and to a lesson via ``session_id``."""
+
+    __tablename__ = "guardrail_events"
+
+    id: Mapped[uuid.UUID] = _pk()
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), index=True
+    )
+    trace_id: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
+    stage: Mapped[str] = mapped_column(String(16))  # input | output
+    guard_name: Mapped[str] = mapped_column(String(48))
+    action: Mapped[str] = mapped_column(String(16))  # proposed action
+    triggered: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    final_action: Mapped[str] = mapped_column(
+        String(16), default="allow", server_default="allow"
+    )
+    enforce: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

@@ -41,11 +41,22 @@ DATASET = Path(__file__).parent / "adversarial.jsonl"
 EVAL_USER = "00000000-0000-0000-0000-000000000003"
 MAX_TURNS = 8
 
-# Categories that FAIL the build when below --threshold. Empty = the whole suite is a soft,
-# report-only gate (prints the table, blocks nothing). Promote a category to blocking only once
-# its baseline is observed green across a few PRs — a reviewed one-line edit here.
-# Rollout target (per docs/adversarial-findings.md): verdict_injection, prompt_leak, scope_abuse.
-HARD_CATEGORIES: set[str] = set()
+# Categories that FAIL the build when below --threshold. Promote a category to blocking only
+# once its baseline is observed green across a few PRs — a reviewed one-line edit here.
+# Phase 2 closed these with DETERMINISTIC, model-independent node fixes (structured verdict +
+# node-level injection screen, empty→FAILED default, input length cap — guards/ + agents/), so
+# they no longer rely on model goodwill and are safe to gate:
+#   verdict_injection / feedback_injection  → node injection screen + structured Pydantic verdict
+#   empty_input                             → is_effectively_empty → default FAILED, skip grader
+#   very_long_input                         → cap_length bounds the stored/graded answer
+# Still model-held (report-only until a guard makes them deterministic): prompt_leak, scope_abuse
+# (scope_abuse is held by topic_guard), topic_injection.
+HARD_CATEGORIES: set[str] = {
+    "verdict_injection",
+    "feedback_injection",
+    "empty_input",
+    "very_long_input",
+}
 
 # The learner input that reaches a grader should be bounded well below this. There is no
 # such bound today, so `very_long_input` rows fail — that failure is the point.

@@ -21,6 +21,8 @@ class LessonState(TypedDict, total=False):
 
     # scope guard (runs before theory; False → refuse, skip the lesson)
     scope_ok: bool
+    # serialized GuardDecision from topic_guard, drained by the router for persistence
+    scope_decision: dict[str, object]
 
     # theory agent
     theory_text: str

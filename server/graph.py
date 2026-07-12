@@ -141,4 +141,10 @@ def get_graph() -> LessonGraph:
 
 
 def thread_config(session_id: str) -> RunnableConfig:
-    return {"configurable": {"thread_id": session_id}}
+    # `recursion_limit` is LangGraph's native runaway-loop kill — a hard cap on graph steps per
+    # run (the budget guardrail's robust, per-run half; complements MAX_THEORY_ATTEMPTS and the
+    # in-process token/cost ledger in guards/budget.py).
+    return {
+        "configurable": {"thread_id": session_id},
+        "recursion_limit": get_settings().guardrail_max_steps_per_session,
+    }

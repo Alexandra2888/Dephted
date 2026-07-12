@@ -14,6 +14,7 @@ from langgraph.config import get_stream_writer
 
 from agents.llms import GPT_MINI, openai_llm
 from agents.state import LessonState
+from guards import decision_as_dict, make_scope_decision
 from prompts import load_prompt
 
 _SCOPE_RE = re.compile(r"\b(OUT_OF_SCOPE|IN_SCOPE)\b", flags=re.IGNORECASE)
@@ -38,11 +39,17 @@ async def topic_guard(state: LessonState) -> dict[str, object]:
     # OUT_OF_SCOPE (or an unparseable response on an abusive topic) refuses.
     verdict = match.group(1).upper() if match else "OUT_OF_SCOPE"
 
+    # Record this existing classification as a guard decision (no second LLM call). The router
+    # drains `scope_decision` from state and persists it alongside the other guard events.
+    scope_decision = decision_as_dict(
+        make_scope_decision(out_of_scope=verdict != "IN_SCOPE", verdict=verdict)
+    )
+
     if verdict == "IN_SCOPE":
-        return {"scope_ok": True}
+        return {"scope_ok": True, "scope_decision": scope_decision}
 
     writer = get_stream_writer()
     writer({"type": "section_start", "section": "theory"})
     writer({"type": "token", "section": "theory", "data": REFUSAL})
     writer({"type": "section_complete", "section": "theory"})
-    return {"scope_ok": False, "theory_text": REFUSAL}
+    return {"scope_ok": False, "theory_text": REFUSAL, "scope_decision": scope_decision}

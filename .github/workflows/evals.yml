@@ -8,6 +8,8 @@ on:
       - "server/graph.py"
       - "server/agents/**"
       - "server/evals/**"
+      - "server/guards/**"
+      - "server/config.py"
 
 jobs:
   evals:
