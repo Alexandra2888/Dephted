@@ -23,6 +23,10 @@ def openai_llm(model: str, temperature: float = 0.3) -> ChatOpenAI:
         temperature=temperature,
         api_key=SecretStr(settings.openai_api_key),
         streaming=True,
+        # Emit a final usage-only chunk on the stream so token usage is recoverable for
+        # cost metrics; without this, streamed OpenAI calls report no usage_metadata. The
+        # extra chunk has empty content, which chunk_text() (agents/_util.py) returns "".
+        stream_usage=True,
     )
 
 

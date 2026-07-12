@@ -19,6 +19,9 @@ class LessonState(TypedDict, total=False):
     # curriculum agent
     plan: dict[str, str]
 
+    # scope guard (runs before theory; False → refuse, skip the lesson)
+    scope_ok: bool
+
     # theory agent
     theory_text: str
     attempts: int

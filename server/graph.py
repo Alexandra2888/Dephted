@@ -23,6 +23,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from agents.curriculum import curriculum
 from agents.feedback import feedback_review
+from agents.guard import topic_guard
 from agents.memory import memory_read, memory_write
 from agents.problem import problem_generate
 from agents.state import LessonState
@@ -44,10 +45,15 @@ def _route_after_check(state: LessonState) -> Literal["problem", "theory"]:
     return "theory"
 
 
+def _route_after_guard(state: LessonState) -> Literal["theory", "refuse"]:
+    return "theory" if state.get("scope_ok", False) else "refuse"
+
+
 def build_graph() -> StateGraph[LessonState]:
     builder: StateGraph[LessonState] = StateGraph(LessonState)
     builder.add_node("memory_read", memory_read)
     builder.add_node("curriculum", curriculum)
+    builder.add_node("topic_guard", topic_guard)
     builder.add_node("theory", theory_explain)
     builder.add_node("comprehension", comprehension)
     builder.add_node("problem", problem_generate)
@@ -56,7 +62,10 @@ def build_graph() -> StateGraph[LessonState]:
 
     builder.add_edge(START, "memory_read")
     builder.add_edge("memory_read", "curriculum")
-    builder.add_edge("curriculum", "theory")
+    builder.add_edge("curriculum", "topic_guard")
+    builder.add_conditional_edges(
+        "topic_guard", _route_after_guard, {"theory": "theory", "refuse": END}
+    )
     builder.add_edge("theory", "comprehension")
     builder.add_conditional_edges(
         "comprehension", _route_after_check, {"problem": "problem", "theory": "theory"}

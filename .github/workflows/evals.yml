@@ -27,8 +27,10 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      # Two gates in one run: deterministic anchors (hard, --anchor-threshold, must be 1.0
+      # — a broken path fails the build) and the LLM judges (soft regression guard at 0.6).
       - name: Run eval suite
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: uv run python -m evals.run --threshold 0.6
+        run: uv run python -m evals.run --threshold 0.6 --anchor-threshold 1.0
