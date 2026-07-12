@@ -5,13 +5,14 @@ section_complete / tool_call, terminated by done or error.
 """
 
 import json
+import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Annotated, Any, cast
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,8 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 from starlette.background import BackgroundTask
 
+import pricing
 from agents.llms import GPT_MINI, openai_llm
 from config import get_settings
+from cost import CACHE_HIT_EVENT, CostCollector, persist_cost_events
 from db import SessionLocal, get_db
 from deps import CurrentUserDep
 from graph import get_graph, thread_config
@@ -63,20 +66,26 @@ GUARD_REFUSAL = (
     "That input was blocked by a safety check. Please rephrase your response and try again."
 )
 BUDGET_MESSAGE = "This lesson has reached its usage budget. Please start a new session to continue."
+HINT_CAP_MESSAGE = (
+    "You've used all the hints for this topic. Try working through the problem with what you have —"
+    " you're closer than you think."
+)
 
 
 @dataclass
 class GuardRun:
-    """Collects guard decisions produced across one streamed request so a single BackgroundTask
-    can persist them after the response is sent (zero request-path latency)."""
+    """Collects guard decisions and cost events produced across one streamed request so a single
+    BackgroundTask can persist them after the response is sent (zero request-path latency)."""
 
     session_id: str
     trace_id: str | None = None
     decisions: list[GuardDecision] = field(default_factory=list)
+    cost_rows: list[dict[str, Any]] = field(default_factory=list)
 
 
 async def _persist_run(run: GuardRun) -> None:
     await persist_guard_decisions(run.session_id, run.trace_id, run.decisions)
+    await persist_cost_events(run.session_id, run.trace_id, run.cost_rows)
 
 
 async def _load_owned_session(
@@ -149,18 +158,19 @@ async def _finalize(
         await db.commit()
 
 
-def _record_usage(sid: str, payload: Any) -> None:
-    """Feed one `messages`-mode stream item into the per-session token/cost ledger."""
+def _tag_cost_span(total_tokens: int, total_cost: float) -> None:
+    """Tag the current `lesson.run` span with cost/tokens so Phoenix and cost_events agree.
+
+    No-op unless tracing is active — on a non-recording span set_attribute is a harmless no-op.
+    """
     try:
-        chunk, meta = payload
-    except (TypeError, ValueError):
-        return
-    node = (meta or {}).get("langgraph_node")
-    usage = getattr(chunk, "usage_metadata", None)
-    if node and usage:
-        budget_guard.record(
-            sid, node, usage.get("input_tokens", 0) or 0, usage.get("output_tokens", 0) or 0
-        )
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        span.set_attribute("cost_usd", total_cost)
+        span.set_attribute("total_tokens", total_tokens)
+    except Exception:  # noqa: BLE001 — tracing must never break the request
+        pass
 
 
 async def _event_stream(
@@ -208,18 +218,32 @@ async def _event_stream(
                 await graph.aupdate_state(cfg, {"pending_input": user_input or ""})
                 stream_input = None
 
-            # Multi-mode: forward `custom` events to the client; use `messages` for token usage.
+            # Multi-mode: forward `custom` events to the client; `messages` for token usage,
+            # `updates` for per-node latency. Cost is captured out-of-band into `run.cost_rows`.
+            # The finally flushes the collector even on a client disconnect (a CancelledError
+            # cancels the async-for), so partial cost still persists via the background task.
+            collector = CostCollector()
+            collector.start_segment()
             section_buf: dict[str, list[str]] = {}
-            async for mode, payload in graph.astream(
-                stream_input, cfg, stream_mode=["custom", "messages"]
-            ):
-                if mode == "messages":
-                    _record_usage(sid, payload)
-                    continue
-                event = cast(dict[str, Any], payload)
-                yield {"data": json.dumps(event)}
-                async for extra in _handle_output_guards(event, section_buf, out_guards, run, enforce):
-                    yield extra
+            try:
+                async for mode, payload in graph.astream(
+                    stream_input, cfg, stream_mode=["custom", "messages", "updates"]
+                ):
+                    collector.on_event(sid, mode, payload)
+                    if mode != "custom":
+                        continue
+                    event = cast(dict[str, Any], payload)
+                    # `cache_hit` is internal cost telemetry (consumed by the collector above),
+                    # not a client-facing lesson event.
+                    if event.get("type") == CACHE_HIT_EVENT:
+                        continue
+                    yield {"data": json.dumps(event)}
+                    async for extra in _handle_output_guards(event, section_buf, out_guards, run, enforce):
+                        yield extra
+            finally:
+                run.cost_rows = collector.rows()
+                total_tokens, total_cost = collector.totals()
+                _tag_cost_span(total_tokens, total_cost)
 
             # Drain the scope guard's decision (produced inside the graph) for persistence.
             snap = await graph.aget_state(cfg)
@@ -295,7 +319,10 @@ async def stream(
 
 @router.post("/hint", response_model=SessionHintResponse)
 async def hint(
-    body: SessionHintRequest, user: RateLimitedUserDep, db: DbDep, response: Response
+    body: SessionHintRequest,
+    user: RateLimitedUserDep,
+    db: DbDep,
+    background: BackgroundTasks,
 ) -> SessionHintResponse:
     row = await _load_owned_session(db, body.session_id, user.user_id)
     snap = await get_graph().aget_state(thread_config(str(row.id)))
@@ -304,24 +331,29 @@ async def hint(
     # Screen the text feeding the hint LLM; persist the decision out-of-band.
     prompt_text = problem or row.topic
     decisions, effect = await _screen_input(str(row.id), user.user_id, prompt_text)
-    response.background = BackgroundTask(
-        persist_guard_decisions, str(row.id), None, decisions
-    )
+    background.add_task(persist_guard_decisions, str(row.id), None, decisions)
     if get_settings().guardrails_enforce and effect in (Action.BLOCK, Action.REFUSE):
         return SessionHintResponse(hint=GUARD_REFUSAL)
 
-    # Track hint usage on the topic card.
-    await db.execute(
+    # Track hint usage on the topic card; RETURNING gives the post-increment count so we can cap.
+    result = await db.execute(
         pg_insert(UserMemoryModel)
         .values(user_id=uuid.UUID(user.user_id), topic=row.topic, status="suggested", hint_count=1)
         .on_conflict_do_update(
             constraint="uq_user_memory_user_topic",
             set_={"hint_count": UserMemoryModel.hint_count + 1},
         )
+        .returning(UserMemoryModel.hint_count)
     )
+    hint_count = result.scalar_one()
     await db.commit()
 
+    # Hint cost cap: once past the ceiling, refuse before spending on another LLM call.
+    if hint_count > get_settings().hint_max_per_topic:
+        return SessionHintResponse(hint=HINT_CAP_MESSAGE)
+
     llm = openai_llm(GPT_MINI, temperature=0.4)
+    started = time.perf_counter()
     llm_response = await llm.ainvoke(
         [
             SystemMessage(
@@ -333,9 +365,34 @@ async def hint(
             HumanMessage(content=f"Problem:\n{prompt_text}\n\nGive one hint."),
         ]
     )
+    latency_ms = int((time.perf_counter() - started) * 1000)
+
+    # The /hint call runs outside the graph, so the stream never sees it — meter it directly.
+    _meter_hint(str(row.id), llm_response, latency_ms, background)
+
     content = llm_response.content
     hint_text = content if isinstance(content, str) else str(content)
     return SessionHintResponse(hint=hint_text.strip())
+
+
+def _meter_hint(
+    session_id: str, llm_response: Any, latency_ms: int, background: BackgroundTasks
+) -> None:
+    """Feed the (non-graph) hint call into the ledger and persist one cost_event row."""
+    usage = getattr(llm_response, "usage_metadata", None) or {}
+    inp = usage.get("input_tokens", 0) or 0
+    out = usage.get("output_tokens", 0) or 0
+    budget_guard.record(session_id, "hint", inp, out)
+    row = {
+        "node": "hint",
+        "model": GPT_MINI,
+        "input_tokens": inp,
+        "output_tokens": out,
+        "cost_usd": pricing.cost(GPT_MINI, inp, out),
+        "latency_ms": latency_ms,
+        "cache_hit": False,
+    }
+    background.add_task(persist_cost_events, session_id, None, [row])
 
 
 @router.post("/end", status_code=status.HTTP_204_NO_CONTENT)

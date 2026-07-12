@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     guardrail_max_cost_per_session: float = 1.00  # USD, graceful abort ceiling
     guardrail_toxicity_enabled: bool = False  # OpenAI moderation — prod-only opt-in
 
+    # Cost monitoring (Phase 3).
+    theory_cache_enabled: bool = True  # cache first-attempt theory per (topic, difficulty)
+    hint_max_per_topic: int = 3  # hint cost cap; refuse further hints past this
+    cost_alert_per_session_usd: float = 0.50  # aggregate CLI --alert drift threshold (< abort)
+
 
 @lru_cache
 def get_settings() -> Settings:

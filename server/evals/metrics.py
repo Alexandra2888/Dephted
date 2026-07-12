@@ -16,33 +16,8 @@ import time
 from collections import defaultdict
 from typing import Any
 
+import pricing
 from evals.anchors import KNOWN_NODES
-
-# Which model each node runs on (agents/llms.py:14-16 + per-agent wiring). Used to price
-# token usage without depending on provider metadata fields.
-NODE_MODEL = {
-    "memory_read": "gpt-4o-mini",
-    "memory_write": "gpt-4o-mini",
-    "curriculum": "gpt-4o-mini",
-    "topic_guard": "gpt-4o-mini",
-    "theory": "claude-sonnet-4-6",
-    "comprehension": "claude-sonnet-4-6",
-    "feedback": "claude-sonnet-4-6",
-    "problem": "gpt-4o",
-}
-
-# USD per 1K tokens (input, output). APPROXIMATE — verify against current provider pricing
-# and edit as rates change. claude-sonnet-4-6 priced at the Sonnet tier.
-PRICES = {
-    "gpt-4o-mini": (0.00015, 0.00060),
-    "gpt-4o": (0.00250, 0.01000),
-    "claude-sonnet-4-6": (0.00300, 0.01500),
-}
-
-
-def _cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    in_rate, out_rate = PRICES.get(model, (0.0, 0.0))
-    return (input_tokens / 1000) * in_rate + (output_tokens / 1000) * out_rate
 
 
 class SessionMetrics:
@@ -85,7 +60,7 @@ class SessionMetrics:
     # per-session rollups
     def cost_per_agent(self) -> dict[str, float]:
         return {
-            node: _cost(NODE_MODEL.get(node, ""), t["input"], t["output"])
+            node: pricing.cost(pricing.model_for_node(node), t["input"], t["output"])
             for node, t in self.tokens.items()
         }
 

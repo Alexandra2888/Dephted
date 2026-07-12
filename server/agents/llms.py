@@ -5,6 +5,7 @@ on process-environment leakage.
 """
 
 from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -27,6 +28,19 @@ def openai_llm(model: str, temperature: float = 0.3) -> ChatOpenAI:
         # cost metrics; without this, streamed OpenAI calls report no usage_metadata. The
         # extra chunk has empty content, which chunk_text() (agents/_util.py) returns "".
         stream_usage=True,
+    )
+
+
+def cached_system(text: str) -> SystemMessage:
+    """A system message marked for Anthropic prompt (prefix) caching.
+
+    The large, static Sonnet system prompt (theory, feedback) is identical across calls, so
+    marking it ``cache_control: ephemeral`` lets Anthropic serve it from its prefix cache on
+    repeat calls (re-explains, the comprehension/feedback pair) at a fraction of the input-token
+    cost. Anthropic-only — do not use with the OpenAI clients.
+    """
+    return SystemMessage(
+        content=[{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
     )
 
 

@@ -16,32 +16,8 @@ from __future__ import annotations
 import threading
 from collections import defaultdict
 
+import pricing
 from config import get_settings
-
-# Mirror of evals/metrics.py NODE_MODEL/PRICES (kept local so runtime code does not import the
-# eval package). Keep the two in sync when provider rates change.
-_NODE_MODEL = {
-    "memory_read": "gpt-4o-mini",
-    "memory_write": "gpt-4o-mini",
-    "curriculum": "gpt-4o-mini",
-    "topic_guard": "gpt-4o-mini",
-    "theory": "claude-sonnet-4-6",
-    "comprehension": "claude-sonnet-4-6",
-    "feedback": "claude-sonnet-4-6",
-    "problem": "gpt-4o",
-}
-
-# USD per 1K tokens (input, output). APPROXIMATE — verify against current provider pricing.
-_PRICES = {
-    "gpt-4o-mini": (0.00015, 0.00060),
-    "gpt-4o": (0.00250, 0.01000),
-    "claude-sonnet-4-6": (0.00300, 0.01500),
-}
-
-
-def _cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    in_rate, out_rate = _PRICES.get(model, (0.0, 0.0))
-    return (input_tokens / 1000) * in_rate + (output_tokens / 1000) * out_rate
 
 
 class _Ledger:
@@ -58,11 +34,11 @@ _lock = threading.Lock()
 
 def record(session_id: str, node: str, input_tokens: int, output_tokens: int) -> None:
     """Add one node's token usage (and its priced cost) to the session ledger."""
-    model = _NODE_MODEL.get(node, "")
+    model = pricing.model_for_node(node)
     with _lock:
         ledger = _ledgers[session_id]
         ledger.tokens += input_tokens + output_tokens
-        ledger.cost += _cost(model, input_tokens, output_tokens)
+        ledger.cost += pricing.cost(model, input_tokens, output_tokens)
 
 
 def usage(session_id: str) -> tuple[int, float]:

@@ -6,7 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from agents._util import chunk_text
-from agents.llms import anthropic_llm
+from agents.llms import anthropic_llm, cached_system
 from agents.state import LessonState
 from guards import cap_length, contains_injection
 from guards.verdict import FeedbackVerdict
@@ -21,7 +21,7 @@ async def feedback_review(state: LessonState) -> dict[str, object]:
     solution, _ = cap_length((state.get("pending_input") or state.get("solution") or "").strip())
 
     messages = [
-        SystemMessage(content=load_prompt("feedback")),
+        cached_system(load_prompt("feedback")),
         HumanMessage(
             content=(
                 f"Problem:\n{state.get('problem_text', '')}\n\n"
