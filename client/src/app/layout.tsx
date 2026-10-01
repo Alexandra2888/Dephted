@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, Space_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { wakeBackend } from "@/lib/api/wake";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,6 +27,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Fire-and-forget: starts the API cold boot during SSR, before client JS.
+  void wakeBackend(3_000);
+
   return (
     <html
       lang="en"
